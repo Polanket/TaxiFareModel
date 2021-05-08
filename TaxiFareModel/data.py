@@ -1,11 +1,23 @@
 import pandas as pd
+from TaxiFareModel.params import BUCKET_NAME, BUCKET_TRAIN_DATA_PATH
+from TaxiFareModel.utils import simple_time_tracker
 
-AWS_BUCKET_PATH = "s3://wagon-public-datasets/taxi-fare-train.csv"
+LOCAL_PATH = '/Users/juan/code/Polanket/TaxiFareModel/raw_data/train.csv'
+DIST_ARGS = dict(start_lat="pickup_latitude",
+                 start_lon="pickup_longitude",
+                 end_lat="dropoff_latitude",
+                 end_lon="dropoff_longitude")
 
 
-def get_data(nrows=10_000):
-    '''returns a DataFrame with nrows from s3 bucket'''
-    df = pd.read_csv(AWS_BUCKET_PATH, nrows=nrows)
+@simple_time_tracker
+def get_data(nrows=10_000, local=False, **kwargs):
+    """returns a DataFrame with nrows from google cloud or local file"""
+    if local:
+        path = LOCAL_PATH
+    else:
+        path = f"gs://{BUCKET_NAME}/{BUCKET_TRAIN_DATA_PATH}"
+
+    df = pd.read_csv(path, nrows=nrows)
     return df
 
 
@@ -25,4 +37,8 @@ def clean_data(df, test=False):
 
 
 if __name__ == '__main__':
-    df = get_data()
+    if __name__ == "__main__":
+        params = dict(nrows=1000,
+                      local=False,  # set to False to get data from GCP (Storage or BigQuery)
+                      )
+        df = get_data(**params)
