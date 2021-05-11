@@ -9,26 +9,24 @@ from termcolor import colored
 import category_encoders as ce
 from psutil import virtual_memory
 from memoized_property import memoized_property
-
+# GCloud imports
+from google.cloud import storage
 # ML flow imports
 import mlflow
 from mlflow.tracking import MlflowClient
 # Sklearn imports
+from xgboost import XGBRegressor
 from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
+from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.linear_model import Lasso, Ridge, LinearRegression
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
-from sklearn.pipeline import Pipeline, make_pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from termcolor import colored
-from xgboost import XGBRegressor
-# GCloud imports
-from google.cloud import storage
+from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, FunctionTransformer
 # Internal imports
-from TaxiFareModel.params import MLFLOW_URI, EXPERIMENT_NAME, BUCKET_NAME, STORAGE_LOCATION
-from TaxiFareModel.encoders import TimeFeaturesEncoder, DistanceTransformer, AddGeohash, Direction, DistanceToCenter
-from TaxiFareModel.utils import compute_rmse, simple_time_tracker
 from TaxiFareModel.data import get_data, clean_data, DIST_ARGS
+from TaxiFareModel.utils import compute_rmse, simple_time_tracker, df_optimized
+from TaxiFareModel.params import MLFLOW_URI, EXPERIMENT_NAME, BUCKET_NAME, STORAGE_LOCATION
+from TaxiFareModel.encoders import TimeFeaturesEncoder, DistanceTransformer, AddGeohash, Direction, DistanceToCenter, OptimizeSize
 
 
 class Trainer(object):
@@ -51,6 +49,7 @@ class Trainer(object):
         self.local = kwargs.get('local', False)
         # For ML flow
         self.experiment_name = EXPERIMENT_NAME
+        self.optimize = kwargs.get("optimize", False)  # Optimizes size of Training Data if set to True
         self.mlflow = kwargs.get('mlflow', False)
         self.model_params = None
         self.pipeline = None
@@ -81,7 +80,7 @@ class Trainer(object):
                                  'max_features': ['auto', 'sqrt'],
                                  'max_depth': [int(x) for x in np.linspace(10, 110, num=11)]}
         elif estimator == "xgboost":
-            model = XGBRegressor(objective='reg:squarederror', n_jobs=-1, max_depth=10, learning_rate=0.05,
+            model = XGBRegressor(objective='reg:squarederror', n_jobs=-1, max_depth=12, learning_rate=0.1,
                                  gamma=3)
             self.model_params = {'max_depth': range(10, 20, 2),
                                  'n_estimators': range(60, 220, 40),
@@ -96,7 +95,7 @@ class Trainer(object):
 
     def set_pipeline(self):
         memory = self.kwargs.get('pipeline_memory', None)
-        dist = self.kwargs.get('distance_type', 'euclidian')
+        dist = self.kwargs.get('distance_type', 'haversine')
         feateng_steps = self.kwargs.get('feateng', ['distance', 'time_features'])
 
         if memory:
@@ -134,6 +133,9 @@ class Trainer(object):
             ('rgs', self.get_estimator())],
             memory=memory)
 
+        if self.optimize:
+            self.pipeline.steps.insert(-1, ['optimize_size', OptimizeSize(verbose=False)])
+
     @simple_time_tracker
     def train(self):
         tic = time.time()
@@ -163,13 +165,20 @@ class Trainer(object):
         rmse = compute_rmse(y_pred, y_test)
         return round(rmse, 3)
 
+    def upload_model_to_gcp(self):
+        client = storage.Client()
+        bucket = client.bucket(BUCKET_NAME)
+        blob = bucket.blob(STORAGE_LOCATION)
+        blob.upload_from_filename('model.joblib')
+
     def save_model(self):
         """Save the model into a .joblib format"""
         joblib.dump(self.pipeline, 'model.joblib')
         print(colored("model.joblib saved locally", "green"))
 
-        # MLFlow methods
+        self.upload_model_to_gcp()
 
+    # MLFlow methods
     @memoized_property
     def mlflow_client(self):
         mlflow.set_tracking_uri(MLFLOW_URI)
@@ -219,16 +228,20 @@ if __name__ == "__main__":
     # Get and clean data
     experiment = "taxifare_set_polanco"
     params = dict(nrows=1_000_000,
-                  local=True,  # set to False to get data from GCP (Storage or BigQuery)
+                  upload=True,
+                  local=False,  # set to False to get data from GCP (Storage or BigQuery)
+                  gridsearch=False,
                   optimize=True,
-                  estimator="xgboost",
+                  estimator="GBM",
                   mlflow=True,  # set to True to log params to mlflow
                   experiment_name=experiment,
-                  pipeline_memory=None,
+                  pipeline_memory=None,  # None if no caching and True if caching expected
                   distance_type="manhattan",
-                  feateng=["distance_to_center", "direction", "distance", "time_features", "geohash"])
+                  feateng=["distance_to_center", "direction", "distance", "time_features", "geohash"],
+                  n_jobs=-1)
     print("############   Loading Data   ############")
     df = get_data(**params)
+    df = df_optimized(df)
     df = clean_data(df)
     y_train = df["fare_amount"]
     X_train = df.drop("fare_amount", axis=1)

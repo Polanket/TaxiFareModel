@@ -1,10 +1,11 @@
 import os
-from math import sqrt
-
 import joblib
 import pandas as pd
-
+from math import sqrt
+# GCloud imports
+from google.cloud import storage
 from sklearn.metrics import mean_absolute_error, mean_squared_error
+from TaxiFareModel.params import STORAGE_LOCATION, BUCKET_NAME
 
 PATH_TO_LOCAL_MODEL = 'model.joblib'
 
@@ -26,8 +27,16 @@ def get_test_data(nrows, data="s3"):
     return df
 
 
-def get_model(path_to_joblib):
-    pipeline = joblib.load(path_to_joblib)
+def get_model(gcloud=False):
+    if gcloud:
+        client = storage.Client()
+        bucket = client.get_bucket(BUCKET_NAME)
+        cloud_model = bucket.get_blob(STORAGE_LOCATION)
+        cloud_model.download_to_filename('cloud_model.joblib')
+        model_path = 'cloud_model.joblib'
+    else:
+        model_path = PATH_TO_LOCAL_MODEL
+    pipeline = joblib.load(model_path)
     return pipeline
 
 
@@ -40,7 +49,7 @@ def evaluate_model(y, y_pred):
 
 def generate_submission_csv(nrows, kaggle_upload=False):
     df_test = get_test_data(nrows)
-    pipeline = joblib.load(PATH_TO_LOCAL_MODEL)
+    pipeline = get_model(gcloud=True)
     if "best_estimator_" in dir(pipeline):
         y_pred = pipeline.best_estimator_.predict(df_test)
     else:
@@ -59,5 +68,5 @@ def generate_submission_csv(nrows, kaggle_upload=False):
 
 if __name__ == '__main__':
     # ⚠️ in order to push a submission to kaggle you need to use the WHOLE dataset
-    nrows = 100
+    nrows = 10000
     generate_submission_csv(nrows, kaggle_upload=False)

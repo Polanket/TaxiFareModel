@@ -25,6 +25,10 @@ clean:
 	@rm -fr TaxiFareModel-*.dist-info
 	@rm -fr TaxiFareModel.egg-info
 
+delete_model_files:
+	@rm *.joblib
+	@rm -fr cloud/
+
 install:
 	@pip install . -U
 
@@ -120,3 +124,4 @@ gcp_submit_training:
 		--runtime-version=${RUNTIME_VERSION} \
 		--region ${REGION} \
 		--stream-logs
+		--scale-tier standard-1

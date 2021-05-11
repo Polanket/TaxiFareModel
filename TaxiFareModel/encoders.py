@@ -1,17 +1,14 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 import pygeohash as gh
 from sklearn.base import BaseEstimator, TransformerMixin
-
-from TaxiFareModel.utils import haversine_vectorized
-from TaxiFareModel.data import get_data, clean_data, DIST_ARGS
 from TaxiFareModel.utils import haversine_vectorized, minkowski_distance
+from TaxiFareModel.data import get_data, clean_data, df_optimized, DIST_ARGS
 
 
 class TimeFeaturesEncoder(BaseEstimator, TransformerMixin):
     """Extract the day of week (dow), the hour, the month and the year from a
     time column."""
-
     def __init__(self, time_column, time_zone_name='America/New_York'):
         self.time_column = time_column
         self.time_zone_name = time_zone_name
@@ -33,7 +30,6 @@ class TimeFeaturesEncoder(BaseEstimator, TransformerMixin):
 
 
 class AddGeohash(BaseEstimator, TransformerMixin):
-
     def __init__(self, precision=6):
         self.precision = precision
 
@@ -50,7 +46,6 @@ class AddGeohash(BaseEstimator, TransformerMixin):
 
 
 class DistanceTransformer(BaseEstimator, TransformerMixin):
-
     def __init__(self, distance_type="euclidian", **kwargs):
         self.distance_type = distance_type
 
@@ -113,6 +108,22 @@ class Direction(BaseEstimator, TransformerMixin):
         X['delta_lat'] = X[self.start_lat] - X[self.end_lat]
         X['direction'] = calculate_direction(X.delta_lon, X.delta_lat)
         return X[["delta_lon", "delta_lat", "direction"]]
+
+    def fit(self, X, y=None):
+        return self
+
+
+class OptimizeSize(BaseEstimator, TransformerMixin):
+    def __init__(self, verbose=False):
+        self.verbose = verbose
+
+    def transform(self, X, y=None):
+        X = pd.DataFrame(X.toarray())
+        assert isinstance(X, pd.DataFrame)
+        X = df_optimized(X)
+        if self.verbose:
+            print(X.head())
+        return X
 
     def fit(self, X, y=None):
         return self
