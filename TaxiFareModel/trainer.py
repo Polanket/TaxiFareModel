@@ -117,7 +117,7 @@ class Trainer(object):
         feateng_blocks = [
             ('distance', pipe_distance, list(DIST_ARGS.values())),
             ('time_features', pipe_time_features, ['pickup_datetime']),
-            ('geohash', pipe_geohash, list(DIST_ARGS.values())),
+            #('geohash', pipe_geohash, list(DIST_ARGS.values())),
             ('direction', pipe_direction, list(DIST_ARGS.values())),
             ('distance_to_center', pipe_distance_to_center, list(DIST_ARGS.values())),
         ]
@@ -227,7 +227,7 @@ if __name__ == "__main__":
     warnings.simplefilter(action='ignore', category=FutureWarning)
     # Get and clean data
     experiment = "taxifare_set_polanco"
-    params = dict(nrows=1_000_000,
+    params = dict(nrows=1_000,
                   upload=True,
                   local=False,  # set to False to get data from GCP (Storage or BigQuery)
                   gridsearch=False,

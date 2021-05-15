@@ -27,7 +27,7 @@ def get_test_data(nrows, data="s3"):
     return df
 
 
-def get_model(gcloud=False):
+def get_model(gcloud=True):
     if gcloud:
         client = storage.Client()
         bucket = client.get_bucket(BUCKET_NAME)

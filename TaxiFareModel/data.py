@@ -61,7 +61,5 @@ def df_optimized(df, verbose=True, **kwargs):
 
 if __name__ == '__main__':
     if __name__ == "__main__":
-        params = dict(nrows=1000,
-                      local=False,  # set to False to get data from GCP (Storage or BigQuery)
-                      )
+        params = dict(nrows=1000, local=False)
         df = get_data(**params)

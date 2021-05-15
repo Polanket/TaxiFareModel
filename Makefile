@@ -125,3 +125,6 @@ gcp_submit_training:
 		--region ${REGION} \
 		--stream-logs
 		--scale-tier standard-1
+
+serve_api:
+	@uvicorn api.fast:app --reload
